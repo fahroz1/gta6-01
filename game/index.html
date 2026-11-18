@@ -1,79 +1,163 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SOLMAR — Open Streets</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e13; font-family: 'Segoe UI', Arial, sans-serif; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; background: rgba(8, 12, 20, 0.72); z-index: 10; }
-  .overlay h1 { font-size: 64px; margin: 0; letter-spacing: 6px; color: #ffd21a; text-shadow: 0 4px 24px rgba(0,0,0,0.8); }
-  .overlay h2 { font-size: 20px; margin: 8px 0 4px; font-weight: 400; color: #cfe8ff; }
-  .overlay p { max-width: 560px; line-height: 1.6; color: #e8e8e8; margin: 10px 20px; }
-  .overlay .keys { font-size: 14px; color: #ffd21a; }
-  .overlay .go { margin-top: 18px; font-size: 18px; color: #ffd21a; animation: pulse 1.4s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; color: #fff; }
-  #objective { position: absolute; top: 14px; left: 14px; background: rgba(0,0,0,0.55); padding: 10px 14px; border-left: 4px solid #ffd21a; max-width: 340px; }
-  #objective-text { font-size: 15px; font-weight: 600; }
-  #objective-dist { font-size: 13px; color: #ffd21a; margin-top: 2px; }
-  #top-right { position: absolute; top: 14px; right: 14px; text-align: right; background: rgba(0,0,0,0.55); padding: 10px 14px; }
-  #stars { font-size: 22px; letter-spacing: 2px; }
-  #cash { font-size: 22px; font-weight: 700; color: #7dff8a; }
-  #health-bar-wrap { width: 150px; height: 10px; background: #222; margin-top: 6px; border: 1px solid #555; }
-  #health-bar { height: 100%; width: 100%; background: #2ecc71; }
-  #health { font-size: 12px; color: #ddd; margin-top: 2px; }
-  #minimap { position: absolute; left: 14px; bottom: 14px; border: 2px solid rgba(255,255,255,0.5); background: #10151c; }
-  #speed { position: absolute; right: 16px; bottom: 16px; font-size: 26px; font-weight: 700; text-shadow: 0 2px 8px #000; }
-  #hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); font-size: 15px; background: rgba(0,0,0,0.6); padding: 6px 12px; }
-  #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 20px; font-weight: 700; color: #ffd21a; text-shadow: 0 2px 10px #000; opacity: 0; transition: opacity 0.3s; }
-  #crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; display: none; }
-  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; }
-  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
-  #crosshair::after { left: 0; top: 8px; width: 18px; height: 2px; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #0a121a;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: #eef3f6;
+  }
+  #game, #game canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .panel {
+    background: rgba(8, 16, 24, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 10px 14px;
+    backdrop-filter: blur(2px);
+  }
+  #topbar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 430px;
+  }
+  #title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  #title span { color: #37e08a; }
+  #stars {
+    font-size: 20px;
+    letter-spacing: 4px;
+    color: #ffd23f;
+  }
+  #stars.hot { color: #ff5a4d; text-shadow: 0 0 8px rgba(255, 90, 77, 0.8); }
+  #job { font-size: 14px; line-height: 1.35; }
+  #speed {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    font-size: 26px;
+    font-weight: 800;
+  }
+  #feed {
+    position: absolute;
+    left: 12px;
+    bottom: 14px;
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .feed-line {
+    background: rgba(8, 16, 24, 0.72);
+    border-left: 3px solid #37e08a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  #minimap {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    width: 168px;
+    height: 168px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  #help {
+    position: absolute;
+    right: 14px;
+    bottom: 56px;
+    font-size: 12px;
+    text-align: right;
+    opacity: 0.85;
+    line-height: 1.5;
+  }
+  #start {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: linear-gradient(180deg, rgba(6, 12, 20, 0.82), rgba(6, 12, 20, 0.55));
+    text-align: center;
+    padding: 20px;
+  }
+  #start.hidden { display: none; }
+  #start h1 {
+    margin: 0;
+    font-size: 52px;
+    letter-spacing: 3px;
+  }
+  #start h1 span { color: #37e08a; }
+  #start p { margin: 0; max-width: 520px; font-size: 16px; line-height: 1.5; }
+  #play {
+    pointer-events: auto;
+    margin-top: 10px;
+    font-size: 20px;
+    font-weight: 700;
+    padding: 14px 42px;
+    border: none;
+    border-radius: 12px;
+    background: #37e08a;
+    color: #06231a;
+    cursor: pointer;
+  }
+  #play:hover { background: #5cf0a2; }
+  .keys { font-size: 13px; opacity: 0.9; line-height: 1.7; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="SOLMAR Open Streets: an open-world crime game in Solmar Bay"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
-
+<div id="game"></div>
 <div id="hud">
-  <div id="objective"><div id="objective-text"></div><div id="objective-dist"></div></div>
-  <div id="top-right">
-    <div id="stars">☆☆☆☆☆</div>
-    <div id="cash">$0</div>
-    <div id="health-bar-wrap"><div id="health-bar"></div></div>
-    <div id="health">HP 100</div>
+  <div id="topbar">
+    <div class="panel">
+      <div id="title">SOLMAR <span>— Open Streets</span></div>
+      <div id="stars">☆☆☆☆☆</div>
+      <div id="job">Loading Solmar Bay…</div>
+    </div>
   </div>
-  <canvas id="minimap" width="180" height="180"></canvas>
-  <div id="speed"></div>
-  <div id="hint"></div>
-  <div id="toast"></div>
-  <div id="crosshair"></div>
+  <canvas id="minimap" width="168" height="168"></canvas>
+  <div id="feed"></div>
+  <div id="speed">0 km/h</div>
+  <div id="help">WASD / arrows — walk &amp; drive<br />E — steal / exit car<br />Stay out of sight to cool the heat</div>
 </div>
-
-<div id="title" class="overlay">
-  <h1>SOLMAR</h1>
-  <h2>OPEN STREETS &mdash; a story of one driver in Solmar Bay</h2>
-  <p>You are Rook, a wheelman for hire. The fixer Mara has three jobs for you — a pickup, a hot car, and the big score. Drive, steal, run from the Solmar Bay police, and get paid.</p>
-  <p class="keys">WASD move / drive &nbsp;·&nbsp; Mouse drag camera &nbsp;·&nbsp; E enter / exit car &nbsp;·&nbsp; F punch &nbsp;·&nbsp; 2 pistol, Click shoot &nbsp;·&nbsp; Shift run &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M mute</p>
-  <p id="title-stats"></p>
-  <div class="go">CLICK TO START</div>
+<div id="start">
+  <h1>SOLMAR <span>— Open Streets</span></h1>
+  <p>You are Rook, a driver in Solmar Bay. Mara has three jobs for you
+  tonight: boost a Comet, shake the tail, and make the last drop across
+  town. Steal cars, dodge the patrols, and watch the beacon.</p>
+  <button id="play">Click to play</button>
+  <div class="keys">WASD / arrows to move and drive &nbsp;·&nbsp; E to steal or exit a car<br />Sound starts on your first click — engine hum, sirens, Mara's calls.</div>
 </div>
-
-<div id="pause" class="overlay" style="display:none">
-  <h1>PAUSED</h1>
-  <p>Solmar Bay waits for no one. Press P or click to keep playing.</p>
-</div>
-
-<div id="end" class="overlay" style="display:none">
-  <h1 id="end-title">BUSTED</h1>
-  <p id="end-text"></p>
-  <div class="go">CLICK TO PLAY AGAIN</div>
-</div>
-
 <script src="./vendor/three.min.js"></script>
 <script type="module" src="./src/main.js"></script>
 </body>

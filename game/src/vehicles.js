@@ -1,89 +1,115 @@
-// Cars: the factory that builds every vehicle mesh and the arcade physics
-// every driven car shares — player, traffic and police all drive the same way.
-import { CAR, PALETTE } from './config.js';
-import { pick } from './random.js';
+// Cars and people: the meshes plus the little arcade driving model every
+// drivable car in Solmar shares.
+import { CONFIG } from './config.js';
 
-export function makeCarMesh(color, isPolice = false) {
-  const group = new THREE.Group();
-  const bodyMat = new THREE.MeshLambertMaterial({ color });
-  const glassMat = new THREE.MeshLambertMaterial({ color: 0x1a2733 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.75, 4.4), bodyMat);
-  body.position.y = 0.65;
-  body.castShadow = true;
-  group.add(body);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.65, 2.2), glassMat);
-  cabin.position.set(0, 1.3, -0.2);
-  cabin.castShadow = true;
-  group.add(cabin);
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 10);
-  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x151515 });
-  for (const [x, z] of [[-1, 1.5], [1, 1.5], [-1, -1.5], [1, -1.5]]) {
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.rotation.z = Math.PI / 2;
-    w.position.set(x, 0.42, z);
-    group.add(w);
+const WHEEL_GEO = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 10);
+const WHEEL_MAT = new THREE.MeshLambertMaterial({ color: 0x14161a });
+
+// A low-poly car: body, cabin, four wheels, a pair of headlights.
+export function makeCarMesh(colorHex) {
+  const car = new THREE.Group();
+  const paint = new THREE.MeshLambertMaterial({ color: colorHex });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x1c2836 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.72, 4.4), paint);
+  body.position.y = 0.62;
+  car.add(body);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.62, 2.2), glass);
+  cabin.position.set(0, 1.24, -0.25);
+  car.add(cabin);
+  const lampMat = new THREE.MeshLambertMaterial({
+    color: 0xfff6c8,
+    emissive: 0xccb45a,
+  });
+  for (const sx of [-0.7, 0.7]) {
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.2, 0.12), lampMat);
+    lamp.position.set(sx, 0.66, 2.22);
+    car.add(lamp);
   }
-  if (isPolice) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.22, 0.5), new THREE.MeshBasicMaterial({ color: 0xff2222 }));
-    bar.position.set(0, 1.75, -0.2);
-    bar.name = 'lightbar';
-    group.add(bar);
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.3, 4.42), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    stripe.position.y = 0.65;
-    group.add(stripe);
+  const wheelSpots = [
+    [-1.0, 1.45],
+    [1.0, 1.45],
+    [-1.0, -1.45],
+    [1.0, -1.45],
+  ];
+  for (const [wx, wz] of wheelSpots) {
+    const wheel = new THREE.Mesh(WHEEL_GEO, WHEEL_MAT);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(wx, 0.42, wz);
+    car.add(wheel);
   }
-  // Headlights so a car reads at dusk and in the minimap's dark.
-  const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff6c8 });
-  for (const x of [-0.7, 0.7]) {
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.18, 0.1), lampMat);
-    lamp.position.set(x, 0.7, 2.22);
-    group.add(lamp);
-  }
-  return group;
+  return car;
 }
 
-export function createCar({ x = 0, z = 0, heading = 0, color = 0xc0392b, sports = false, police = false, scene }) {
-  const mesh = makeCarMesh(color, police);
-  mesh.position.set(x, 0, z);
-  mesh.rotation.y = heading;
-  if (scene) scene.add(mesh);
-  return {
-    mesh,
-    pos: mesh.position,
-    heading,
-    speed: 0,
-    hp: CAR.hp,
-    maxSpeed: sports ? CAR.sportsMax : CAR.maxSpeed,
-    sports,
-    police,
-    color,
-    dead: false,
-    steer: 0,
-  };
-}
-
-// Arcade drive: throttle, brake/reverse, steering that bites harder at speed.
-// input: {up, down, left, right} booleans. Returns nothing; edits car.
-export function driveCar(car, input, dt) {
-  if (car.dead) return;
-  if (input.up) car.speed += CAR.accel * dt;
-  else if (input.down) {
-    car.speed -= (car.speed > 0.5 ? CAR.brake : CAR.accel * 0.7) * dt;
-  } else {
-    car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), 8 * dt);
+// Rook on foot: a simple standing figure, coat and cap, facing +z.
+export function makePersonMesh() {
+  const person = new THREE.Group();
+  const coat = new THREE.MeshLambertMaterial({ color: 0x7a2e2e });
+  const skin = new THREE.MeshLambertMaterial({ color: 0xd9a986 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x23262b });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.95, 0.4), coat);
+  torso.position.y = 1.05;
+  person.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), skin);
+  head.position.y = 1.85;
+  person.add(head);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.34, 0.14, 10), dark);
+  cap.position.y = 2.06;
+  person.add(cap);
+  for (const sx of [-0.2, 0.2]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.62, 0.3), dark);
+    leg.position.set(sx, 0.31, 0);
+    person.add(leg);
   }
-  car.speed = Math.max(-CAR.reverseMax, Math.min(car.maxSpeed, car.speed));
-  const steerInput = (input.left ? 1 : 0) - (input.right ? 1 : 0);
-  const grip = Math.min(1, Math.abs(car.speed) / 8);
-  car.heading += steerInput * CAR.steer * grip * dt * Math.sign(car.speed || 1);
-  car.pos.x += Math.sin(car.heading) * car.speed * dt;
-  car.pos.z += Math.cos(car.heading) * car.speed * dt;
-  car.mesh.rotation.y = car.heading;
+  return person;
 }
 
-// A parked car waiting to be stolen, or a traffic car's ride.
-export function randomCar(rng, x, z, heading, scene, sportsChance = 0.15) {
-  const sports = rng() < sportsChance;
-  const color = sports ? pick(rng, [0xe74c3c, 0xf1c40f, 0xecf0f1]) : pick(rng, PALETTE.car);
-  return createCar({ x, z, heading, color, sports, scene });
+// One drivable car: a mesh plus heading, speed and a steering angle.
+// The model is deliberately arcade: accelerate, brake, reverse, steer.
+export class CarRig {
+  constructor(mesh, x, z, heading) {
+    this.mesh = mesh;
+    this.mesh.position.set(x, 0, z);
+    this.mesh.rotation.y = heading;
+    this.heading = heading;
+    this.speed = 0;
+    this.steer = 0;
+  }
+
+  get x() {
+    return this.mesh.position.x;
+  }
+
+  get z() {
+    return this.mesh.position.z;
+  }
+
+  forward() {
+    return { x: Math.sin(this.heading), z: Math.cos(this.heading) };
+  }
+
+  // controls: { throttle: -1..1, steer: -1..1 } — throttle 1 is gas.
+  update(dt, controls) {
+    const c = CONFIG;
+    if (controls.throttle > 0) {
+      this.speed += c.carAccel * controls.throttle * dt;
+    } else if (controls.throttle < 0) {
+      if (this.speed > 0.5) {
+        this.speed -= c.carBrake * dt;
+      } else {
+        this.speed += c.carAccel * 0.45 * controls.throttle * dt;
+      }
+    } else {
+      this.speed -= Math.sign(this.speed) * 6 * dt;
+      if (Math.abs(this.speed) < 0.2) this.speed = 0;
+    }
+    this.speed = Math.max(-c.carReverseMax, Math.min(c.carTopSpeed, this.speed));
+    const steerTarget = controls.steer * c.carSteer;
+    this.steer += (steerTarget - this.steer) * Math.min(1, dt * 8);
+    const speedFactor = Math.min(1, Math.abs(this.speed) / 8);
+    this.heading += this.steer * speedFactor * Math.sign(this.speed || 1) * dt * 1.4;
+    const f = this.forward();
+    this.mesh.position.x += f.x * this.speed * dt;
+    this.mesh.position.z += f.z * this.speed * dt;
+    this.mesh.rotation.y = this.heading;
+  }
 }

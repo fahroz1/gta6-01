@@ -1,46 +1,68 @@
-// SOLMAR — Open Streets: the entry program for make.fun's gta6-01 bounty.
-// Node 22, standard library only. It hands the game in: it copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json
-// with the vendored make.fun library, so the judge reads the game as built.
+// SOLMAR — Open Streets: competition entrypoint (Node 22).
 //
-// Serve the game locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Copies game/ and screenshots/ into /output, then writes dossier.json
+// with the make.fun kit helper (vendor/makefun-game.ts). The dossier is
+// the entry the graders read: the game sources, the vendored three.js,
+// and the four screenshots.
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { buildDossier, DOSSIER_SCHEMA } from './vendor/makefun-game.ts';
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { buildDossier } from './vendor/makefun-game.ts';
+const OUT_DIR = '/output';
+const GAME_DIR = 'game';
+const SHOTS_DIR = 'screenshots';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+if (!existsSync(GAME_DIR)) {
+  throw new Error('game/ directory is missing — nothing to submit');
+}
+if (!existsSync(`${GAME_DIR}/index.html`)) {
+  throw new Error('game/index.html is missing — the entrypoint has no game');
+}
 
-mkdirSync(out, { recursive: true });
-// Copy game/ whole, exactly as it stands beside this file, so the judge runs
-// the same files that were screenshotted — no build step in between.
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+mkdirSync(OUT_DIR, { recursive: true });
+cpSync(GAME_DIR, `${OUT_DIR}/game`, { recursive: true });
+if (existsSync(SHOTS_DIR)) {
+  cpSync(SHOTS_DIR, `${OUT_DIR}/screenshots`, { recursive: true });
+}
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the
-// bytes; the others refuse an entry the scorer would refuse (more than 4
-// screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of
-// game files, in all, or a path under game/ over 1000 bytes: game/ counts
-// beside /output's own 1000-entry cap, its screenshots/ and dossier.json).
-const dossier = buildDossier(out, {
-  text_max_bytes: 163840,
-  screenshots: { max: 4, max_bytes: 262144 },
-  game_max_files: 993,
-  game_max_bytes: 50331648,
+// Report what was staged, so a failed or partial copy is visible at once.
+function countTree(dir) {
+  let files = 0;
+  let bytes = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      const sub = countTree(full);
+      files += sub.files;
+      bytes += sub.bytes;
+    } else {
+      files += 1;
+      bytes += statSync(full).size;
+    }
+  }
+  return { files, bytes };
+}
+const staged = countTree(`${OUT_DIR}/game`);
+const shots = existsSync(`${OUT_DIR}/screenshots`)
+  ? countTree(`${OUT_DIR}/screenshots`)
+  : { files: 0, bytes: 0 };
+console.log(
+  `SOLMAR staged: ${staged.files} game files (${staged.bytes} bytes), ` +
+  `${shots.files} screenshots (${shots.bytes} bytes)`,
+);
+
+const dossier = buildDossier(OUT_DIR, {
+  text_max_bytes: 1_000_000,
+  screenshots: { max: 8, max_bytes: 262144 },
+  game_max_files: 1000,
+  game_max_bytes: 10_000_000,
   game_path_max_bytes: 1000,
 });
-writeFileSync(join(out, 'dossier.json'), dossier);
+writeFileSync(`${OUT_DIR}/dossier.json`, dossier);
+console.log(`SOLMAR dossier written: ${dossier.length} bytes -> ${OUT_DIR}/dossier.json`);
 
-// A short build log: what the entry hands in and where, so a failed run says
-// so here instead of silently writing a short dossier.
-const gameFiles = readdirSync(join(out, 'game'), { recursive: true });
-const shotFiles = existsSync(join(out, 'screenshots')) ? readdirSync(join(out, 'screenshots')) : [];
-console.log(
-  `SOLMAR handed in to ${out}: ${gameFiles.length} game entries, ${shotFiles.length} screenshots, ` +
-  `dossier ${statSync(join(out, 'dossier.json')).size} bytes`,
-);
+// Read the dossier back and confirm it is the schema the graders expect.
+const check = JSON.parse(readFileSync(`${OUT_DIR}/dossier.json`, 'utf-8'));
+if (check.schema !== DOSSIER_SCHEMA) {
+  throw new Error(`dossier schema mismatch: got ${String(check.schema)}`);
+}
+console.log(`SOLMAR dossier verified: schema ${check.schema}`);

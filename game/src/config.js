@@ -1,61 +1,97 @@
-// SOLMAR — Open Streets: tuning and shared constants.
-// One city grid, one scale, one set of speeds: every system reads these.
-export const CITY = {
-  blocks: 7, // blocks per side
-  block: 46, // block pitch (road centre to road centre)
-  road: 14, // road width
-  span: 7 * 46, // 322, city edge to edge
-  beach: 64, // sand strip depth south of the city
-  water: 120, // water depth past the sand
+// SOLMAR — Open Streets: central tuning for the whole game.
+// Every number the city, the cars, the police and the missions share lives
+// here, so a single edit retunes the feel of the game.
+export const CONFIG = {
+  // City layout: 7 streets each way, 48 units apart, blocks between them.
+  streetPitch: 48,
+  streetCount: 7,
+  streetHalfWidth: 6,
+  cityHalf: 168,
+  blockInset: 24,
+
+  // Look and light.
+  skyColor: 0x87b5d6,
+  fogColor: 0x9db8c8,
+  fogNear: 120,
+  fogFar: 420,
+  groundColor: 0x3f5a3a,
+  roadColor: 0x2c2f36,
+  sidewalkColor: 0x8a8d90,
+
+  // The player on foot.
+  walkSpeed: 9,
+  runSpeed: 13,
+  playerRadius: 1.1,
+
+  // Driving.
+  carAccel: 26,
+  carBrake: 34,
+  carReverseMax: 12,
+  carTopSpeed: 30,
+  carSteer: 1.9,
+  carRadius: 2.2,
+  enterRange: 5,
+
+  // Traffic.
+  trafficCount: 10,
+  trafficSpeed: 9,
+  trafficSpeedJitter: 3,
+
+  // Police and wanted.
+  wantedMax: 5,
+  policeTopSpeed: 31,
+  policeCatchRadius: 3.2,
+  wantedDecayPerSec: 0.12,
+  wantedDecayClearRange: 34,
+
+  // Missions.
+  arriveRadius: 7,
+  beaconPulseSpeed: 2.4,
+
+  // Camera.
+  camFollowDistance: 13,
+  camFollowHeight: 7,
+  camLookAhead: 8,
+
+  // Minimap.
+  minimapSize: 168,
 };
 
-export const SAVE_KEY = 'solmar-save-v1';
+// The seeded default the city and the staged shots both start from.
+export const DEFAULT_SEED = 1;
 
-export const PLAYER = {
-  walkSpeed: 6,
-  runSpeed: 10,
-  radius: 0.9,
-  health: 100,
-};
-
-export const CAR = {
-  accel: 14,
-  brake: 26,
-  maxSpeed: 38,
-  sportsMax: 48,
-  reverseMax: 12,
-  steer: 1.9,
-  radius: 1.6,
-  hp: 100,
-};
-
-export const TRAFFIC_COUNT = 14;
-export const PED_COUNT = 18;
-
-export const WANTED = {
-  decaySeconds: 25, // quiet seconds before one star drops
-  maxStars: 5,
-  bustSeconds: 1.2, // police contact on foot before a bust
-};
-
-export const MISSIONS = [
-  { id: 1, name: 'First Job', reward: 300 },
-  { id: 2, name: 'Hot Wheels', reward: 600 },
-  { id: 3, name: 'The Big Score', reward: 1200 },
+// Mara's three jobs. Positions sit on street intersections so a car can
+// always drive right up to them.
+export const JOBS = [
+  {
+    id: 'boost',
+    title: 'Job 1 — Boost the Comet',
+    intro:
+      "Rook, I need a Comet. Silver one, parked by the marina on West Pier. Take it, then bring it to the garage on Crane Street.",
+    hint: 'Steal the silver car, then drive to the garage marker.',
+    carSpot: { x: -96, z: -48 },
+    target: { x: 96, z: 96 },
+    targetLabel: 'Garage — Crane Street',
+  },
+  {
+    id: 'getaway',
+    title: 'Job 2 — Shake the Tail',
+    intro:
+      'Cops are on you now, Rook. Lose them and get to the north bridge. Do not stop at the lights.',
+    hint: 'Reach the north bridge while the police chase you.',
+    carSpot: null,
+    target: { x: 0, z: -144 },
+    targetLabel: 'North Bridge',
+    forceWanted: 2,
+  },
+  {
+    id: 'drop',
+    title: 'Job 3 — The Last Drop',
+    intro:
+      'Last one. Take the Comet across town to the south docks and walk away clean. You did good, Rook.',
+    hint: 'Deliver the car to the south docks.',
+    carSpot: null,
+    target: { x: -48, z: 144 },
+    targetLabel: 'South Docks',
+  },
 ];
-
-// Palette: sun-soaked Solmar Bay — warm sand, pastel towers, teal water.
-export const PALETTE = {
-  sky: 0x87bfe8,
-  fog: 0xa8c8e0,
-  sun: 0xfff2d0,
-  ground: 0x3a3f46,
-  sidewalk: 0x8a8f96,
-  sand: 0xe8d29a,
-  water: 0x2e8fa8,
-  building: [0xd8b48f, 0xc9a06a, 0x9fb4c7, 0xe0cfa8, 0xb98a7a, 0x8fa8b8, 0xd0d0c8, 0xc78d5a],
-  window: 0x2a3542,
-  car: [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0x8e44ad, 0xe67e22, 0xecf0f1, 0x2c3e50],
-  police: 0x1a2a44,
-  taxi: 0xf7c948,
-};

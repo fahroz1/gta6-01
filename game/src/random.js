@@ -1,8 +1,9 @@
-// Seeded RNG (mulberry32): the same seed always builds the same city, so a
-// screenshot scene stages identically every time it is opened.
-export function createRandom(seed) {
+// Deterministic randomness for Solmar Bay. The city layout, the traffic
+// turns and the staged screenshots all draw from this so the same seed
+// always builds the same streets.
+export function mulberry32(seed) {
   let a = seed >>> 0;
-  return function random() {
+  return function () {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -11,14 +12,22 @@ export function createRandom(seed) {
   };
 }
 
-export function pick(rng, list) {
-  return list[Math.floor(rng() * list.length)];
-}
-
-export function range(rng, min, max) {
-  return min + rng() * (max - min);
-}
-
-export function rangeInt(rng, min, max) {
-  return min + Math.floor(rng() * (max - min + 1));
+// A small helper bundle around one seeded stream.
+export function makeRng(seed) {
+  const next = mulberry32(seed);
+  return {
+    next,
+    range(min, max) {
+      return min + next() * (max - min);
+    },
+    int(min, max) {
+      return Math.floor(min + next() * (max - min + 1));
+    },
+    pick(list) {
+      return list[Math.floor(next() * list.length)];
+    },
+    chance(p) {
+      return next() < p;
+    },
+  };
 }

@@ -1,134 +1,91 @@
-// Screenshot scenes: ?shot=start|drive|chase|mission with &seed=N stages a
-// fixed scene and the page paints it twice, then sets window.__shotReady.
-// Each scene is the real game — the real city, the real cars, the real HUD —
-// driven by a scripted autopilot for a fixed number of steps.
-import { createCar } from './vehicles.js';
-import { startMission } from './missions.js';
-import { addWanted } from './police.js';
+// Staged screenshot views. When the page loads with ?shot=<name>&seed=<n>
+// the game is arranged into one fixed, deterministic scene so a screenshot
+// captures it: the player on foot by a car, driving, a police chase, or
+// standing at the mission beacon.
+import { CONFIG } from './config.js';
 
-// Put a traffic car on a road near a point, for the drive and chase scenes.
-function placeTrafficCar(G, x, z, heading, speed) {
-  const car = G.traffic.find((c) => !c.stolen && !c.dead && Math.abs(c.pos.x - x) > 30);
-  if (!car) return;
-  car.pos.x = x;
-  car.pos.z = z;
-  car.heading = heading;
-  car.speed = speed;
-  car.route = { axis: 'x', line: z, dir: 1 };
-}
-
-export function stageShot(name, G) {
-  const { world, player } = G;
-  // Fresh heat for every shot.
-  G.wanted.stars = 0;
-  G.wanted.quietTimer = 0;
-  G.wanted.bustTimer = 0;
-  for (const cop of G.police) G.scene.remove(cop.mesh);
-  G.police.length = 0;
-  player.health = 100;
-  player.cash = 2450;
-  player.onFoot = true;
-  if (player.car) {
-    player.car = null;
-  }
-  player.mesh.visible = true;
+// Place the player and the camera for one named shot. game is the object
+// main.js assembles: { player, traffic, police, missions, camera, world,
+// hud, setShotCamera }. Returns a short label for the shot.
+export function applyShot(game, name, seed) {
+  const { player, missions, camera } = game;
+  const setCam = (px, py, pz, lx, ly, lz) => {
+    camera.position.set(px, py, pz);
+    camera.lookAt(lx, ly, lz);
+    game.shotCamera = true;
+  };
 
   if (name === 'start') {
-    player.pos.set(8, 0, 118);
-    player.heading = Math.PI;
+    // Rook on foot beside a parked car, the city stretching behind him.
+    player.mesh.position.set(-88, 0, -48);
+    player.heading = Math.PI * 0.75;
     player.mesh.rotation.y = player.heading;
-    G.shotCamera = { pos: [-70, 62, 195], look: [10, 8, 30] };
-    return { screen: 'title', autopilot: null, stats: 'Cash $2,450 · 0 jobs done · Solmar Bay awaits' };
+    player.mesh.visible = true;
+    setCam(-102, 9, -66, -84, 2, -44);
+    return 'start';
   }
 
   if (name === 'drive') {
-    const car = createCar({ x: 23, z: -60, heading: 0, color: 0xe74c3c, sports: true, scene: G.scene });
-    player.car = car;
-    player.onFoot = false;
-    player.mesh.visible = false;
-    car.speed = 26;
-    // Traffic on the east-west roads the player will cross or approach:
-    // east on z=-23 behind, west on z=23 ahead-right, east on z=69 far ahead.
-    placeTrafficCar(G, -69, -23, Math.PI / 2, 10);
-    placeTrafficCar(G, 69, 23, -Math.PI / 2, 11);
-    placeTrafficCar(G, -115, 69, Math.PI / 2, 9);
-    G.missions.text = 'Cruise Solmar Bay — find Mara at the Plaza';
-    G.shotCamera = null; // chase camera
-    // The car sits on the north-south road x=23 driving south (+z): stay on
-    // that road (axis 'z', line = x) instead of steering across the city.
-    return { screen: 'play', autopilot: { axis: 'z', line: 23, dir: 1 } };
+    // Rook driving down a street, traffic ahead. The car sits on the
+    // street centerline and the camera pulls back high enough to see it.
+    const car = game.traffic.allCars[0];
+    player.enterCar(car);
+    car.mesh.position.set(-40, 0, 0);
+    car.heading = Math.PI / 2;
+    car.mesh.rotation.y = car.heading;
+    car.speed = 16;
+    const f = car.forward();
+    setCam(
+      car.x - f.x * 17, 8.5, car.z - f.z * 17,
+      car.x + f.x * 10, 2, car.z + f.z * 10,
+    );
+    return 'drive';
   }
 
   if (name === 'chase') {
-    // Slower than the sports car on purpose: the cruisers (faster than this
-    // car) close in over the two staged seconds instead of being left behind.
-    const car = createCar({ x: -23, z: 40, heading: 0, color: 0xf1c40f, sports: false, scene: G.scene });
-    player.car = car;
-    player.onFoot = false;
-    player.mesh.visible = false;
-    car.speed = 30;
-    addWanted(G.wanted, 3);
-    // Roadblock ahead on the same road (x=-23, south of the player), facing
-    // the player head-on so the cruisers are in frame, plus one chaser behind.
-    const roadblock = [
-      { x: -29, z: 78, heading: Math.PI, speed: 28 },
-      { x: -17, z: 78, heading: Math.PI, speed: 28 },
-      { x: -23, z: 24, heading: 0, speed: 30 },
-    ];
-    for (const spec of roadblock) {
-      const cop = createCar({
-        x: spec.x,
-        z: spec.z,
-        heading: spec.heading,
-        color: 0x1a2a44,
-        police: true,
-        scene: G.scene,
-      });
-      cop.speed = spec.speed;
-      G.police.push(cop);
+    // A police car right on Rook's tail, sirens in the air. Both cars
+    // stay on the street centerline so the camera never sits in a tower.
+    const car = game.traffic.allCars[1] || game.traffic.allCars[0];
+    player.enterCar(car);
+    car.mesh.position.set(0, 0, -20);
+    car.heading = 0;
+    car.mesh.rotation.y = 0;
+    car.speed = 18;
+    game.police.setWanted(2);
+    game.police.update(0.01, player, game.world);
+    if (game.police.cars.length > 0) {
+      const cop = game.police.cars[0];
+      cop.mesh.position.set(-1, 0, car.z - 13);
+      cop.heading = 0;
+      cop.mesh.rotation.y = 0;
+      cop.speed = 20;
     }
-    placeTrafficCar(G, -69, 69, Math.PI / 2, 9);
-    G.missions.text = 'Lose the cops — 3 stars on you!';
-    // Fixed high camera hovering over the road itself (x=-23), looking south
-    // down it: the cruisers trail just behind the player, so the camera must
-    // sit above the road corridor — a side camera's sightline crosses a block
-    // and a tower hides the cars.
-    G.shotCamera = { pos: [-23, 30, 72], look: [-23, 0, 115] };
-    // Same road as the drive shot: north-south road x=-23, driving south.
-    return { screen: 'play', autopilot: { axis: 'z', line: -23, dir: 1 } };
+    const f = car.forward();
+    setCam(
+      car.x - f.x * 17 + 6, 9, car.z - f.z * 17,
+      car.x + f.x * 10, 2, car.z + f.z * 10,
+    );
+    return 'chase';
   }
 
-  // mission
-  G.missions.index = 0;
-  startMission(G.missions);
-  const target = G.missions.target;
-  // Stand on the north-south road x=115, 26m west of the Docks target, facing
-  // east so the yellow beacon rises above the docks building in frame.
-  player.pos.set(target.x - 26, 0, target.z);
-  player.heading = Math.atan2(target.x - player.pos.x, target.z - player.pos.z);
-  player.mesh.rotation.y = player.heading;
-  // Fixed high camera: the player mid-frame, the street and the beacon above
-  // the docks building behind him. The chase cam sits too low and the beacon
-  // hides behind the nearest tower.
-  G.shotCamera = { pos: [95, 16, -28], look: [135, 6, 0] };
-  return { screen: 'play', autopilot: null };
+  if (name === 'mission') {
+    // Rook on foot at the glowing mission beacon, job 1's garage in view.
+    const t = missions.target;
+    player.mesh.position.set(t.x - 6, 0, t.z + 8);
+    player.heading = Math.atan2(t.x - player.mesh.position.x, t.z - player.mesh.position.z);
+    player.mesh.rotation.y = player.heading;
+    player.mesh.visible = true;
+    missions.moveBeacon(t.x, t.z);
+    setCam(t.x - 14, 10, t.z + 18, t.x, 3, t.z);
+    return 'mission';
+  }
+
+  // Unknown shot name: fall back to the start vista.
+  return applyShot(game, 'start', seed);
 }
 
-// Autopilot input for the drive and chase shots: stay on the road line,
-// throttle on, steer gently toward the line.
-export function autopilotInput(G, auto) {
-  const car = G.player.car;
-  if (!car) return { up: false, down: false, left: false, right: false };
-  const across = auto.axis === 'x' ? car.pos.z - auto.line : car.pos.x - auto.line;
-  const wantHeading = auto.axis === 'x' ? (auto.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (auto.dir > 0 ? 0 : Math.PI);
-  let dh = wantHeading - car.heading;
-  while (dh > Math.PI) dh -= Math.PI * 2;
-  while (dh < -Math.PI) dh += Math.PI * 2;
-  const steer = dh + across * 0.02;
-  return {
-    up: true,
-    down: false,
-    left: steer > 0.05,
-    right: steer < -0.05,
-  };
+export function shotNames() {
+  return ['start', 'drive', 'chase', 'mission'];
 }
+
+export { CONFIG };

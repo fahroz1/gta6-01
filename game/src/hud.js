@@ -1,157 +1,115 @@
-// The HUD: DOM overlays for the screens and the readouts, plus a 2D canvas
-// minimap that draws the city, the player, the police and the mission target.
-import { CITY } from './config.js';
-import { distanceToTarget } from './missions.js';
+// The Solmar HUD: wanted stars, speed, the current job, Mara's phone
+// feed, a top-down minimap, and the start screen. All plain DOM over the
+// WebGL canvas, no framework.
+import { CONFIG } from './config.js';
 
-export function createHud() {
-  const el = (id) => document.getElementById(id);
-  return {
-    hud: el('hud'),
-    title: el('title'),
-    pause: el('pause'),
-    end: el('end'),
-    endTitle: el('end-title'),
-    endText: el('end-text'),
-    objective: el('objective'),
-    objectiveText: el('objective-text'),
-    objectiveDist: el('objective-dist'),
-    stars: el('stars'),
-    cash: el('cash'),
-    health: el('health'),
-    healthBar: el('health-bar'),
-    speed: el('speed'),
-    hint: el('hint'),
-    toast: el('toast'),
-    crosshair: el('crosshair'),
-    map: el('minimap'),
-    mapCtx: el('minimap').getContext('2d'),
-    titleStats: el('title-stats'),
-  };
-}
-
-let toastTimer = 0;
-export function showToast(hud, message, seconds = 3) {
-  hud.toast.textContent = message;
-  hud.toast.style.opacity = '1';
-  toastTimer = seconds;
-}
-
-export function updateToast(hud, dt) {
-  if (toastTimer > 0) {
-    toastTimer -= dt;
-    if (toastTimer <= 0) hud.toast.style.opacity = '0';
+export class Hud {
+  constructor() {
+    this.root = document.getElementById('hud');
+    this.starsEl = document.getElementById('stars');
+    this.speedEl = document.getElementById('speed');
+    this.jobEl = document.getElementById('job');
+    this.feedEl = document.getElementById('feed');
+    this.mapEl = document.getElementById('minimap');
+    this.mapCtx = this.mapEl.getContext('2d');
+    this.startEl = document.getElementById('start');
+    this.wanted = 0;
+    this.feedCount = 0;
   }
-}
 
-export function setScreen(hud, screen, info = {}) {
-  hud.title.style.display = screen === 'title' ? 'flex' : 'none';
-  hud.pause.style.display = screen === 'paused' ? 'flex' : 'none';
-  hud.end.style.display = screen === 'busted' || screen === 'wasted' || screen === 'complete' ? 'flex' : 'none';
-  hud.hud.style.display = screen === 'play' ? 'block' : 'none';
-  if (screen === 'busted') {
-    hud.endTitle.textContent = 'BUSTED';
-    hud.endText.textContent = info.text || 'The Solmar Bay police caught you. You lost your cut.';
-  } else if (screen === 'wasted') {
-    hud.endTitle.textContent = 'WASTED';
-    hud.endText.textContent = info.text || 'You went down in Solmar Bay. The medics patched you up — for a fee.';
-  } else if (screen === 'complete') {
-    hud.endTitle.textContent = 'SOLMAR IS YOURS';
-    hud.endText.textContent = info.text || 'Every job done. Rook runs this city now.';
+  setWanted(n) {
+    const stars = Math.max(0, Math.min(CONFIG.wantedMax, Math.ceil(n)));
+    if (stars === this.wanted) return;
+    this.wanted = stars;
+    let text = '';
+    for (let i = 0; i < CONFIG.wantedMax; i += 1) {
+      text += i < stars ? '★' : '☆';
+    }
+    this.starsEl.textContent = text;
+    this.starsEl.classList.toggle('hot', stars > 0);
   }
-  if (screen === 'title' && info.stats) hud.titleStats.textContent = info.stats;
-}
 
-export function updateReadouts(hud, game) {
-  const { player, wanted, missions } = game;
-  let stars = '';
-  for (let i = 0; i < 5; i += 1) stars += i < wanted.stars ? '★' : '☆';
-  hud.stars.textContent = stars;
-  hud.stars.style.color = wanted.stars > 0 ? '#ffcf3f' : '#ffffff';
-  hud.cash.textContent = `$${Math.floor(player.cash)}`;
-  hud.health.textContent = `HP ${Math.max(0, Math.ceil(player.health))}`;
-  hud.healthBar.style.width = `${Math.max(0, player.health)}%`;
-  hud.healthBar.style.background = player.health > 50 ? '#2ecc71' : player.health > 25 ? '#f39c12' : '#e74c3c';
-  const speed = player.onFoot ? 0 : Math.abs(Math.round((player.car ? player.car.speed : 0) * 3.6));
-  hud.speed.textContent = player.onFoot ? '' : `${speed} km/h`;
-  hud.objectiveText.textContent = missions.text;
-  const dist = distanceToTarget(missions, player.onFoot ? player.pos : player.car.pos);
-  hud.objectiveDist.textContent = dist === null ? '' : `${dist}m`;
-  hud.crosshair.style.display = player.weapon === 'pistol' && player.onFoot ? 'block' : 'none';
-}
-
-export function setHint(hud, text) {
-  hud.hint.textContent = text || '';
-}
-
-// Minimap: roads, blocks, beach, water, player arrow, police, traffic dots,
-// mission beacon. Redrawn a few times a second.
-export function drawMinimap(hud, game) {
-  const ctx = hud.mapCtx;
-  const S = 180;
-  const span = CITY.span + 50;
-  const toMap = (x, z) => [((x + span / 2) / span) * S, ((z + span / 2) / span) * S];
-  ctx.fillStyle = '#10151c';
-  ctx.fillRect(0, 0, S, S);
-  // Water + sand at the south edge.
-  ctx.fillStyle = '#2e8fa8';
-  ctx.fillRect(0, S - 14, S, 14);
-  ctx.fillStyle = '#e8d29a';
-  ctx.fillRect(0, S - 22, S, 8);
-  // Roads.
-  ctx.strokeStyle = '#4a5058';
-  ctx.lineWidth = 4;
-  for (const line of game.world.lines) {
-    const [x1, y1] = toMap(line, -CITY.span / 2);
-    const [x2, y2] = toMap(line, CITY.span / 2);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    const [x3, y3] = toMap(-CITY.span / 2, line);
-    const [x4, y4] = toMap(CITY.span / 2, line);
-    ctx.beginPath();
-    ctx.moveTo(x3, y3);
-    ctx.lineTo(x4, y4);
-    ctx.stroke();
+  setSpeed(kmh) {
+    this.speedEl.textContent = `${Math.round(kmh)} km/h`;
   }
-  // Blocks.
-  ctx.fillStyle = '#2c313a';
-  for (let i = 0; i < CITY.blocks; i += 1) {
-    for (let j = 0; j < CITY.blocks; j += 1) {
-      const [x, y] = toMap((i - 3) * CITY.block - 16, (j - 3) * CITY.block - 16);
-      ctx.fillRect(x, y, 32 * (S / span), 32 * (S / span));
+
+  setJob(text) {
+    if (this.jobEl.textContent !== text) {
+      this.jobEl.textContent = text;
     }
   }
-  const dot = (x, z, color, r = 2.5) => {
-    const [mx, my] = toMap(x, z);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(mx, my, r, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  for (const car of game.traffic) dot(car.pos.x, car.pos.z, '#8a8f96', 1.8);
-  for (const cop of game.police) dot(cop.pos.x, cop.pos.z, '#3f8cff', 3);
-  const target = game.missions.active ? game.missions.target : null;
-  if (target) {
-    const [mx, my] = toMap(target.x, target.z);
-    ctx.fillStyle = '#ffd21a';
-    ctx.beginPath();
-    ctx.arc(mx, my, 5 + Math.sin(game.time * 4) * 1.5, 0, Math.PI * 2);
-    ctx.fill();
+
+  // A line from Mara (or the game) appears at the top of the phone feed.
+  pushMessage(text) {
+    const line = document.createElement('div');
+    line.className = 'feed-line';
+    line.textContent = text;
+    this.feedEl.prepend(line);
+    this.feedCount += 1;
+    while (this.feedEl.children.length > 4) {
+      this.feedEl.removeChild(this.feedEl.lastChild);
+    }
   }
-  // Player arrow, rotated by heading.
-  const px = game.player.onFoot ? game.player.pos : game.player.car.pos;
-  const heading = game.player.onFoot ? game.player.heading : game.player.car.heading;
-  const [mx, my] = toMap(px.x, px.z);
-  ctx.save();
-  ctx.translate(mx, my);
-  ctx.rotate(heading);
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.moveTo(0, -6);
-  ctx.lineTo(4, 5);
-  ctx.lineTo(-4, 5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+
+  showStart() {
+    this.startEl.classList.remove('hidden');
+  }
+
+  hideStart() {
+    this.startEl.classList.add('hidden');
+  }
+
+  // Top-down map: grey blocks, green objective, yellow traffic, red/blue
+  // police, white player arrow.
+  drawMinimap(world, player, trafficCars, policeCars, target) {
+    const ctx = this.mapCtx;
+    const size = CONFIG.minimapSize;
+    const half = CONFIG.cityHalf;
+    const toMap = (x, z) => [
+      ((x + half) / (half * 2)) * size,
+      ((z + half) / (half * 2)) * size,
+    ];
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = 'rgba(10, 18, 26, 0.72)';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = 'rgba(140, 150, 160, 0.55)';
+    for (const f of world.footprints) {
+      const [mx, mz] = toMap(f.x - f.hw, f.z - f.hd);
+      const w = (f.hw * 2 / (half * 2)) * size;
+      const h = (f.hd * 2 / (half * 2)) * size;
+      ctx.fillRect(mx, mz, Math.max(1, w), Math.max(1, h));
+    }
+    if (target) {
+      const [tx, ty] = toMap(target.x, target.z);
+      ctx.fillStyle = '#37e08a';
+      ctx.beginPath();
+      ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#37e08a';
+      ctx.beginPath();
+      ctx.arc(tx, ty, 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ffd23f';
+    for (const car of trafficCars) {
+      const [cx, cy] = toMap(car.x, car.z);
+      ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+    }
+    ctx.fillStyle = '#ff4d4d';
+    for (const car of policeCars) {
+      const [cx, cy] = toMap(car.x, car.z);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const [px, py] = toMap(player.x, player.z);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }
