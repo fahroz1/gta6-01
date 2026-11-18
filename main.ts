@@ -16,6 +16,8 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 mkdirSync(out, { recursive: true });
+// Copy game/ whole, exactly as it stands beside this file, so the judge runs
+// the same files that were screenshotted — no build step in between.
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
@@ -34,11 +36,11 @@ const dossier = buildDossier(out, {
 });
 writeFileSync(join(out, 'dossier.json'), dossier);
 
-// A short build log: what the entry hands in, so a failed run says so here
-// instead of silently writing a short dossier.
+// A short build log: what the entry hands in and where, so a failed run says
+// so here instead of silently writing a short dossier.
 const gameFiles = readdirSync(join(out, 'game'), { recursive: true });
 const shotFiles = existsSync(join(out, 'screenshots')) ? readdirSync(join(out, 'screenshots')) : [];
 console.log(
-  `SOLMAR handed in: ${gameFiles.length} game entries, ${shotFiles.length} screenshots, ` +
+  `SOLMAR handed in to ${out}: ${gameFiles.length} game entries, ${shotFiles.length} screenshots, ` +
   `dossier ${statSync(join(out, 'dossier.json')).size} bytes`,
 );
